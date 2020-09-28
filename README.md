@@ -1,6 +1,6 @@
 # STAT5014 course project
 
-Team name: Team Beta
+Team name: Team Beta <br>
 Team members: Tsering Dolkar, Jaeyoung Lee, Liang Shi
 
 ## Introduction
