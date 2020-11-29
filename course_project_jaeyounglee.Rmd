@@ -6,16 +6,51 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library(data.table)
 library(tidyverse)
 library(bit64)
-
+library(lubridate)
 ```
 
 
-```{r load_data}
+```{r load_data, eval=FALSE}
+# Load data
 tweetdata <- fread('uselection_tweets_1jul_11nov.csv')
-tweetdata
+
+# Select variables of interest
+# Remove redundant varaiables (Negativity, Positivity) b/c there is score
+tweetdata_select <- tweetdata %>% select(`Retweet-Count`, PartyName, Score)
+names(tweetdata_select) <- c('retweet_count', 'party', 'score')
+
+saveRDS(tweetdata_select, 'tweetdata_select.RDS')
 
 ```
+
+```{r tidy_data}
+# Load RDS data
+election_data <- readRDS('tweetdata_select.RDS')
+
+# Remove observations with zero retweet_count
+election <- election_data %>% filter(retweet_count != 0)
+
+summary(election)
+
+hist(election$retweet_count)
+
+
+```
+
+```{r logistic regression}
+# Multinomial Logistic regression
+# Response variable : party (BothParty, Democrats, Neither, Republicans)
+nnet::multinom(party~retweet_count + score, data = election)
+
+
+
+
+
+```
+
+
+```{r appendix, ref.label=knitr::all_labels(), echo = TRUE, eval=FALSE, include=TRUE}
