@@ -1,0 +1,21 @@
+---
+title: "Course Project - Logistic regression"
+author: "Jaeyoung Lee"
+date: "11/29/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(tidyverse)
+library(bit64)
+
+```
+
+
+```{r load_data}
+tweetdata <- fread('uselection_tweets_1jul_11nov.csv')
+tweetdata
+
+```
