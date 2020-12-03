@@ -27,30 +27,77 @@ saveRDS(tweetdata_select, 'tweetdata_select.RDS')
 
 ```
 
-```{r tidy_data}
+```{r tidy_data, eval=FALSE}
 # Load RDS data
-election_data <- readRDS('tweetdata_select.RDS')
+twitter_data <- readRDS('tweetdata_select.RDS')
 
-# Remove observations with zero retweet_count
-election <- election_data %>% filter(retweet_count != 0)
+# Remove observations with zero retweet_count 
+# Left observations mentioned one of two parties only: Republicans or Democrats
+twitter <- twitter_data %>% filter(retweet_count != 0) %>% 
+  filter(party == 'Republicans' | party == 'Democrats') 
 
-summary(election)
+```
 
-hist(election$retweet_count)
+```{r logistic regression, eval = FALSE}
+##### Multinomial Logistic regression with bootstrap-like method #####
+# Sample from the data
+set.seed(20202021)
+n <- 1000 # Sample size
+M <- 1000   # Number of iteration
+
+logit_coefficients <- NULL # Coefficients from M logit models
+# Generate M coefficients
+for(i in 1:M){
+  # Sample from data with size n
+  index <- sample(1:nrow(twitter), size = n) 
+  twitter_sample <- twitter[index,]           
+  
+  # Response variable : Democrats, Republicans
+  logit_fit <- nnet::multinom(party~retweet_count + score, 
+                              data = twitter_sample, trace = FALSE)
+  logit_coefficients <- rbind(logit_coefficients, summary(logit_fit)$coefficients)
+
+}
+
+# Save RData
+save.image('logit_model.RData')
 
 
 ```
 
-```{r logistic regression}
-# Multinomial Logistic regression
-# Response variable : party (BothParty, Democrats, Neither, Republicans)
-nnet::multinom(party~retweet_count + score, data = election)
-
-
-
-
+```{r load_rdata}
+# Load RData
+load('logit_model.RData')
 
 ```
 
+```{r result}
+# Summary of data used
+print('Summary of data')
+summary(twitter)
+
+# Summary of logistic regression coefficients
+print('Summary of logistic regression coefficients')
+summary(logit_coefficients)
+
+# Exponentiate regression coefficients
+print('Summary of exponenetiated coefficients')
+summary(exp(logit_coefficients))
+
+```
+From the raw data, $12515164$ observations are used which *Re-tweet counts* are non-zero. To speed up computation, re-sampling methods, which is similar to Bootstrap, is used. From the result, we can build a logistic regression model as follows:
+
+\begin{eqnarray} 
+\log \frac{P(Y = Republicans)}{P(Y = Democrats)} = 1.0995 - 4 \times 10^{-6} Retweet -0.27241 Score
+\end{eqnarray}
+where the baseline is *Democrats*, and the odds is defined as the proportion of Republicans to Democrats.
+
+From the model, we can notice that the input *Re-tweet counts* is not significant. In other words, there is quite little effect of *Re-tweet counts* to the model. In addition, under fixed *Re-tweet counts*, the odds of Republicans is $exp(1.0995 -0.27241 \times Score) = 3.012 \times exp(-0.27241 \times Score)$. Therefore, as *Score* increases as one, the odds of Republicans decreases 23.84%. In other words, we can say that increase of the sentiment score of the tweets leads to the decrease of the odds of Republicans, and reversely, the increase of the odds of Democrats.
+
+
+
+
+
+\pagebreak
 
 ```{r appendix, ref.label=knitr::all_labels(), echo = TRUE, eval=FALSE, include=TRUE}
