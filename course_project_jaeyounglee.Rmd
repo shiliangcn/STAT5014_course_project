@@ -85,7 +85,26 @@ print('Summary of exponenetiated coefficients')
 summary(exp(logit_coefficients))
 
 ```
-From the raw data, $12515164$ observations are used which *Re-tweet counts* are non-zero. To speed up computation, re-sampling methods, which is similar to Bootstrap, is used. From the result, we can build a logistic regression model as follows:
+\pagebreak
+
+The raw data has $24201654$ observations. To reduce the size of data and to fix the right tail distribution of *Re-tweet counts*, the observations which have zero counts are excluded. Also, to control the multicollinearity, redundant variables are not selected for constructing a model. 
+
+From the raw data, $12515164$ observations are used which *Re-tweet counts* are non-zero. Since the observations are still too large, it is necessary to use some methods handling the large data. To speed up computation and deal with large data, a re-sampling method is used which is similar to Bootstrap. Unlike Bootstrap, we sample without replacement and the sample size of each sample is smaller than the original.
+
+The algorithm for the re-sampling method is as follows:
+
+\begin{enumerate}
+  \item For j = 1, \ldots, $M = 1000$,
+    \begin{enumerate}
+      \item Obtain sample of size $n = 1000$.
+      \item Fit logistic regression from the $j$th sample.
+      \item Store the coefficients of the model.
+    \end{enumerate}
+\end{enumerate}
+
+From the $M = 1000$ samples, we can obtain a matrix of logistic regression coefficients. 
+
+From the result, we can build a logistic regression model as follows:
 
 \begin{eqnarray} 
 \log \frac{P(Y = Republicans)}{P(Y = Democrats)} = 1.0995 - 4 \times 10^{-6} Retweet -0.27241 Score
