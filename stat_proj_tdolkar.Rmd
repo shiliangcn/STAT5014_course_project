@@ -1,5 +1,5 @@
 ---
-title: "proj"
+title: "Stat5014 Course Project"
 author: "Tsering Dolkar"
 date: "12/1/2020"
 output: pdf_document
