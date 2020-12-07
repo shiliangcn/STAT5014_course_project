@@ -1,0 +1,251 @@
+---
+title: "proj"
+author: "Tsering Dolkar"
+date: "12/1/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H', fig.align = "center", echo = TRUE, include = FALSE, eval = TRUE, cache = TRUE)
+# Helper packages
+library(data.table)
+library(vader)
+library(ggplot2)
+library(multipanelfigure)
+
+# Modeling package
+library(rpart)
+library(caret)
+library(tree)
+
+# Model interpretability packages
+library(rattle)
+library(rpart.plot)
+```
+
+
+```{r data_import, include=T, cache=TRUE, cache.lazy=FALSE}
+data <- read.csv("uselection.csv", sep = ";")
+data <- data[,2:13]
+party <- data.frame()
+
+for(i in 1:nrow(data[1:500,])){
+  if(data$PartyName[i] == "BothParty"){
+    party <- rbind(party, 0)
+  }
+  if(data$PartyName[i] == "Republicans"){
+    party <- rbind(party, 1)
+  }
+  if(data$PartyName[i] == "Democrats"){
+    party <- rbind(party, 2)
+  }
+  if(data$PartyName[i] == "Neither"){
+    party <- rbind(party, 3)
+  }
+}
+#change all data2 to data in the code.
+data2 <- cbind(data[1:500,], party)
+#change "X0" to whatever default colname appears for party
+names(data2)[names(data2) == "X0"] <- "Party"
+data2$Party <- as.factor(data2$Party)
+
+```
+
+Programmatically split the data into 75% and 25% as training and validation sets respectively. 
+
+```{r split_data, include=T}
+## 75% of the sample size
+smp_size <- floor(0.75 * nrow(data2))
+
+## set the seed to make your partition reproducible
+set.seed(12345)
+
+#change data2 to data later on
+trn_idx <- sample(seq_len(nrow(data2)), size = smp_size)
+training_data <- data2[trn_idx,]
+rownames(training_data) <- NULL
+validation_set <- data2[-trn_idx,]
+rownames(validation_set) <- NULL
+
+head(training_data)
+```
+
+### 2. 
+
+Produce pairwise scatter plots between relevant variables color coded by Party. This will help us see how effective classification using tree plot will be and which predictor might be the most relevant in making decisions in a metric.
+
+```{r pairwise_scatterplot, include=T}
+
+pairs(cbind(training_data$Retweet.Count,training_data$Party,training_data$Score,training_data$Negativity,training_data$Positivity,training_data$Uncovered.Tokens,training_data$Total.Tokens),labels = c("Retweet.Count","Party","Score","Negativity","Positivity","Uncovered.Tokens","Total.Tokens"),col=(as.factor(training_data$Party)),pch=16)
+
+```
+
+If we were to see clusters on the scatterplot, we will expect classification tree to be quite effective. However, this data doesn't seem very representative of all voters as we had initially hoped. However, we will proceed forward to see how well it works against other methods. Classification trees base splitting decisions on a metric, for example the trees presented in class use deviance to judge how to partition the tree. I used rpart tree classification package. Rpart uses gini impurity to select splits when performing classification.
+
+### 3. 
+
+Unstandardized effect size statistic comparing the two groups for each variable in the set.
+
+```{r effect_size, include=T}
+# unstandardized measure (e.g., the difference between group means or the unstandardized
+# regression coefficients)
+democrat <- data.frame()
+republican <- data.frame()
+
+for(i in 1:(nrow(training_data))){
+  if(training_data$Party[i] == 2){
+    democrat = rbind(democrat, training_data[i,])
+  }
+  if(training_data$Party[i] == 1){
+    republican = rbind(republican, training_data[i,])
+  }
+}
+effectsize_retweetcount <- mean(republican$Retweet.Count) - mean(democrat$Retweet.Count)
+effectsize_score <- mean(republican$Score) - mean(democrat$Score)
+effectsize_negativity <- mean(republican$Negativity) - mean(democrat$Negativity) 
+effectsize_positivity <- mean(republican$Positivity) - mean(democrat$Positivity)
+effectsize_uncovered.token <- mean(republican$Uncovered.Tokens) -  mean(democrat$Uncovered.Tokens)
+effectsize_total.token <- mean(republican$Total.Tokens) -  mean(democrat$Total.Tokens)
+paste0("The unstandardized effect size for retweetcount of party 1 and 2 is: ", round(effectsize_retweetcount, 3))
+paste0("The unstandardized effect size for score of party 1 and 2 is: ", round(effectsize_score, 3))
+paste0("The unstandardized effect size for negativity of party 1 and 2 is: ", round(effectsize_negativity, 3))
+paste0("The unstandardized effect size for positivity of party 1 and 2 is: ", round(effectsize_positivity, 3))
+paste0("The unstandardized effect size for uncovered.token of party 1 and 2 is: ", round(effectsize_uncovered.token, 3))
+paste0("The unstandardized effect size for total.token of party 1 and 2 is: ", round(effectsize_total.token, 3))
+```
+### 4. 
+
+```{r rpart_element explanation, include=T, eval=F}
+
+# https://cran.r-project.org/web/packages/rpart/vignettes/longintro.pdf
+
+# xval: The number of cross-validations to be done. Usually set to zero during
+# exploratory phases of the analysis. A value of 10, for instance, increases the
+# compute time to 11-fold over a value of 0.
+
+#xerror is cross validation error
+
+#The splitting index can be "gini" or "information".
+
+#minsplit: The minimum number of observations in a node for which the routine
+#will even try to compute a split. The default is 20.
+
+#minbucket: The minimum number of observations in a terminal node. This
+#defaults to minsplit/3.
+
+#maxcompete: It is often useful in the printout to see not only the variable that
+# gave the best split at a node, but also the second, third, etc best. This parameter
+# controls the number that will be printed. It has no effect on computational time,
+# and a small effect on the amount of memory used. The default is 4.
+
+# cp: The threshold complexity parameter
+# Internally, rpart keeps track of something called the complexity of a tree. The complexity  
+# measure is a combination of the size of a tree and the ability of the tree to separate the 
+# classes of the target variable. If the next best split in growing a tree does not reduce the 
+# tree’s overall complexity by a certain amount, rpart will terminate the growing process. This 
+# amount is specified by the complexity parameter, cp, in the call to rpart(). Setting cp to a 
+# negative amount ensures that the tree will be fully grown.
+
+# Each row represents a different height of the tree. In general, more levels in the tree mean 
+# that it has lower classification error on the training. However, you run the risk of 
+# overfitting. Often, the cross-validation error will actually grow as the tree gets more   #levels (at least, after the 'optimal' level).
+
+```
+
+```{r choose_classification_tree, include=T}
+
+#cp_val <- c(0.10, 0.09, 0.08, 0.06, 0.05, 0.01, 0.0)
+#cp_val[i]
+
+minsplit_val <- seq(1,20,1)
+
+minbucket_val <- seq(1,200,1)
+
+misclassification_rate <- matrix(nrow = length(minsplit_val), ncol = length(minbucket_val))
+
+minxerror <- data.frame()
+
+for(i in 1:length(minsplit_val)){
+  for(j in 1:length(minbucket_val)){
+    # classification of the tree
+    # set cp to 0, so we can see overfitting if it occurs, and then prune as 
+    # we see fit.
+    party_tree <- rpart(Party~Retweet.Count+Score+Negativity+Positivity+
+                          Uncovered.Tokens+Total.Tokens, training_data, 
+                        control = rpart.control(minsplit = minsplit_val[i], 
+                                                minbucket = minbucket_val[j], 
+                                                cp = 0))
+    # predict the result target we will end up with
+    t_pred <- predict(party_tree, newdata = training_data, method = "class")
+    #mean of the tree being accurate
+    misclassification_rate[i,j] <- mean(training_data$Party == t_pred)
+    #find the cp of all the min xerror, i.e cross validation error.
+    minxerror <- rbind(minxerror,
+                       party_tree$cptable[which.min(party_tree$cptable[,"xerror"]),"CP"])
+    if(is.unsorted(rev(party_tree$cptable[,'xerror'])) == FALSE && length(party_tree$cptable[,'xerror'])
+       > 1){
+      print(paste("(",i,",",j,")"))
+      printcp(party_tree)
+    }
+  }
+}
+colnames(minxerror) <- "min_cp"
+#find the min of all the min xerrors, and we will have the optimal cp.
+cp_val <- min(minxerror)
+# we look at the misclassification rate and choose the row and column index that gives us the 
+#best classification and the largest observation acceptance for the parameter minbucket and 
+#minsplit.
+misclassification_rate
+
+```
+
+We see from the matrix that the best classification while choosing the minimum observation to split on and minimum observation at a terminal node required is at a varying range of minbucket and minsplit values. I read the printcp(training_set_tree), and looked at all the xerror, which is the cross validation error. Since none of the xerror for these trees seem to be increasing when we look down the column, we know from this that none of these parameters give us overfitted tree. Keeping in mind that minsplit is the minimum number of observations in a node for which the routine will even try to compute a split, we will choose a minsplit = 1. 
+
+```{r choose_tree, include=T}
+
+#minsplit = 5
+party_tree.chosen1 <- rpart(Party~Retweet.Count+Score+Negativity+Positivity+
+                          Uncovered.Tokens+Total.Tokens,
+                                    training_data, control =
+                            rpart.control(minsplit = 1,
+                                    minbucket = 17, cp = 0))
+fancyRpartPlot(party_tree.chosen1, caption = NULL)
+printcp(party_tree.chosen1)
+
+#minsplit = 6
+party_tree.chosen2 <- rpart(Party~Retweet.Count+Score+Negativity+Positivity+
+                          Uncovered.Tokens+Total.Tokens, training_data, 
+                          control = rpart.control(minsplit = 1, minbucket = 18, cp = 0))
+fancyRpartPlot(party_tree.chosen2, caption = NULL)
+printcp(party_tree.chosen2)
+
+```
+
+Although we have a number of possible minsplit and minbucket values, we will choose two classification trees with smallest minsplit 
+
+```{r apply_on_validation_set, include=T}
+
+# At minsplit = 5
+
+party_tree.chosen1 <- rpart(Party~Retweet.Count+Score+Negativity+Positivity+
+                          Uncovered.Tokens+Total.Tokens, validation_set, 
+                          control = rpart.control(minsplit = 1, minbucket = 17,
+                                                  cp = 0))
+fancyRpartPlot(party_tree.chosen1, caption = NULL)
+printcp(party_tree.chosen1)
+  
+# At minsplit = 6
+
+party_tree.chosen2 <- rpart(Party~Retweet.Count+Score+Negativity+Positivity+
+                          Uncovered.Tokens+Total.Tokens,validation_set,
+                          control = rpart.control(minsplit = 1, minbucket = 18,
+                                                  cp = 0))
+fancyRpartPlot(party_tree.chosen2, caption = NULL)
+printcp(party_tree.chosen2)
+
+```
+
+From this, it correctly classifies the data into a Republican majority twitter users. This could be because we don't have a data representative of the population on twitter, or that there was some kind of bias while collecting this data. If it is the first reason, it could be that since the key role of Republicans, i.e. Trump, is especially active on twitter, more republicans are politically active on twitter than the other parties and therefore, in effect caused bias in this data from twitter. 
+
+
+
